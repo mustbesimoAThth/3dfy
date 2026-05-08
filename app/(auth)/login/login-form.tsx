@@ -10,11 +10,24 @@ import {
 export function LoginForm({
   searchParamsPromise,
 }: {
-  searchParamsPromise: Promise<{ next?: string; sent?: string }>;
+  searchParamsPromise: Promise<{
+    next?: string;
+    sent?: string;
+    error?: string;
+    error_code?: string;
+    error_description?: string;
+  }>;
 }) {
   const params = use(searchParamsPromise);
   const next = params.next ?? "/app";
   const initialSent = params.sent === "1";
+  const urlAuthError = params.error_description
+    ? decodeURIComponent(params.error_description.replace(/\+/g, " "))
+    : params.error_code === "otp_expired"
+      ? "This sign-in link has expired or was already used. Request a new one."
+      : params.error
+        ? "Sign-in failed. Try again."
+        : null;
 
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState<"magic" | "google" | null>(null);
@@ -28,7 +41,13 @@ export function LoginForm({
 
   if (!supabase) {
     return (
-      <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-6 text-left text-sm">
+      <div className="space-y-4">
+        {urlAuthError && (
+          <p className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {urlAuthError}
+          </p>
+        )}
+        <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-6 text-left text-sm">
         <p className="font-semibold text-destructive">Supabase is not wired up</p>
         <p className="mt-2 text-muted-foreground">
           The app needs{" "}
@@ -68,6 +87,7 @@ export function LoginForm({
             Supabase → Project Settings → API
           </a>
         </p>
+      </div>
       </div>
     );
   }
@@ -117,6 +137,11 @@ export function LoginForm({
 
   return (
     <div className="space-y-4">
+      {urlAuthError && (
+        <p className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {urlAuthError}
+        </p>
+      )}
       <button
         type="button"
         onClick={signInWithGoogle}

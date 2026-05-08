@@ -5,7 +5,13 @@ import { LoginForm } from "./login-form";
 export default function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; sent?: string }>;
+  searchParams: Promise<{
+    next?: string;
+    sent?: string;
+    error?: string;
+    error_code?: string;
+    error_description?: string;
+  }>;
 }) {
   return (
     <main className="container mx-auto flex min-h-screen max-w-md flex-col px-4 py-10">

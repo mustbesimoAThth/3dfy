@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { AuthHashRedirect } from "@/components/AuthHashRedirect";
 
 const APP_NAME = "3dfy";
 const APP_DESCRIPTION =
@@ -46,7 +47,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className="min-h-screen gradient-bg">{children}</body>
+      <body className="min-h-screen gradient-bg">
+        <AuthHashRedirect />
+        {children}
+      </body>
     </html>
   );
 }
