@@ -9,6 +9,7 @@ export type Json =
 export type JobStatus = "queued" | "in_progress" | "completed" | "failed";
 
 export type FalModelId =
+  | "fal-ai/reconviagen-0.5"
   | "tripo3d/p1/image-to-3d"
   | "tripo3d/h3.1/image-to-3d";
 

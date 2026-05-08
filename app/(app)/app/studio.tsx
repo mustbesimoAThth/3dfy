@@ -13,6 +13,7 @@ import {
   type GenerateRequest,
   type H31Options,
   type P1Options,
+  type ReconOptions,
 } from "@/lib/fal";
 import type { FalModelId, JobRow } from "@/lib/types/database";
 
@@ -27,7 +28,12 @@ export function Studio({
   const [jobs, setJobs] = useState(initialJobs);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [image, setImage] = useState<PreparedImage | null>(null);
-  const [model, setModel] = useState<FalModelId>("tripo3d/p1/image-to-3d");
+  const [model, setModel] = useState<FalModelId>("fal-ai/reconviagen-0.5");
+  const [recon, setRecon] = useState<ReconOptions>({
+    resolution: 1024,
+    texture_size: 2048,
+    ss_source: "mesh",
+  });
   const [p1, setP1] = useState<P1Options>({ texture: true });
   const [h31, setH31] = useState<H31Options>({
     texture: "standard",
@@ -105,9 +111,11 @@ export function Studio({
   }, [jobs, previewUrls, supabase]);
 
   const request: GenerateRequest =
-    model === "tripo3d/p1/image-to-3d"
-      ? { model, input_image_path: "", options: p1 }
-      : { model, input_image_path: "", options: h31 };
+    model === "fal-ai/reconviagen-0.5"
+      ? { model, input_image_path: "", options: recon }
+      : model === "tripo3d/p1/image-to-3d"
+        ? { model, input_image_path: "", options: p1 }
+        : { model, input_image_path: "", options: h31 };
 
   const cost = estimateCost(request);
 
@@ -132,10 +140,12 @@ export function Studio({
         });
       if (upErr) throw upErr;
 
-      const body =
-        model === "tripo3d/p1/image-to-3d"
-          ? { model, input_image_path: path, options: p1 }
-          : { model, input_image_path: path, options: h31 };
+      const body: GenerateRequest =
+        model === "fal-ai/reconviagen-0.5"
+          ? { model, input_image_path: path, options: recon }
+          : model === "tripo3d/p1/image-to-3d"
+            ? { model, input_image_path: path, options: p1 }
+            : { model, input_image_path: path, options: h31 };
 
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -188,8 +198,10 @@ export function Studio({
           <h2 className="mb-2 text-sm font-medium">Options</h2>
           <GenerationOptions
             model={model}
+            recon={recon}
             p1={p1}
             h31={h31}
+            onChangeRecon={setRecon}
             onChangeP1={setP1}
             onChangeH31={setH31}
             disabled={submitting}
@@ -204,10 +216,22 @@ export function Studio({
 
         <div className="sticky bottom-4 z-10 flex items-center justify-between rounded-2xl border border-border/60 bg-background/80 p-3 backdrop-blur">
           <div className="text-xs text-muted-foreground">
-            Estimated cost{" "}
-            <span className="font-medium text-foreground">
-              ${cost.toFixed(2)}
-            </span>
+            {model === "fal-ai/reconviagen-0.5" ? (
+              <>
+                Est. from{" "}
+                <span className="font-medium text-foreground">
+                  ${cost.toFixed(2)}
+                </span>{" "}
+                <span className="opacity-80">(see fal billing)</span>
+              </>
+            ) : (
+              <>
+                Estimated cost{" "}
+                <span className="font-medium text-foreground">
+                  ${cost.toFixed(2)}
+                </span>
+              </>
+            )}
           </div>
           <button
             type="button"

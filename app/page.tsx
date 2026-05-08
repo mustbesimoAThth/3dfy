@@ -80,8 +80,8 @@ export default async function LandingPage() {
           />
           <Feature
             icon={<Cpu className="h-5 w-5" />}
-            title="Two model tiers"
-            body="Pick Tripo P1 for speed or H3.1 for HD textures and detailed geometry."
+            title="Three ways to generate"
+            body="Standard (default) for best balance, or fast Tripo P1, or Tripo H3.1 for HD and extras."
           />
           <Feature
             icon={<Box className="h-5 w-5" />}
