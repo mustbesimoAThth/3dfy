@@ -14,7 +14,10 @@ yarn-debug.log*
 yarn-error.log*
 .vercel
 next-env.d.ts
-# Serwist / accidental Finder duplicate names
+# Serwist emits these during build — do not commit
+public/sw.js
+public/sw.js.map
+public/swe-worker-*.js
 public/sw 2.js
 .idea
 .vscode
