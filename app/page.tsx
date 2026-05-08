@@ -2,11 +2,25 @@ import Link from "next/link";
 import { ArrowRight, Box, Cpu, Image as ImageIcon, Sparkles } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
+async function getCurrentUser() {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    return user;
+  } catch (err) {
+    // Missing env vars or Supabase outage — degrade to signed-out state instead
+    // of crashing the landing page.
+    console.error("[landing] auth lookup failed:", err);
+    return null;
+  }
+}
+
 export default async function LandingPage() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   return (
     <main className="container mx-auto flex min-h-screen flex-col px-4 py-10">
