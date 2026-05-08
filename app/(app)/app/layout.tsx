@@ -19,15 +19,18 @@ export default async function AppLayout({
     <div className="min-h-screen pb-[max(env(safe-area-inset-bottom),16px)]">
       <header className="sticky top-0 z-30 border-b border-border/60 bg-background/70 backdrop-blur">
         <div className="container mx-auto flex items-center justify-between px-4 py-3">
-          <Link href="/app" className="flex items-center gap-2 font-semibold">
+          <Link href="/app" className="flex shrink-0 items-center gap-2 font-semibold">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground">
               <Box className="h-4 w-4" />
             </span>
             <span>3dfy</span>
           </Link>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="hidden text-muted-foreground sm:inline">
-              {user.email}
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-2 text-sm sm:gap-3">
+            <span
+              className="min-w-0 truncate text-right text-muted-foreground"
+              title={user.email ?? undefined}
+            >
+              {user.email ?? "Signed in"}
             </span>
             <SignOutButton>
               <LogOut className="h-4 w-4" />

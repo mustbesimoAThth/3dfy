@@ -31,14 +31,22 @@ export default async function LandingPage() {
           </span>
           <span className="text-lg">3dfy</span>
         </Link>
-        <nav className="flex items-center gap-2">
+        <nav className="flex min-w-0 max-w-[70%] flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
           {user ? (
-            <Link
-              href="/app"
-              className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              Open app
-            </Link>
+            <>
+              <span
+                className="max-w-[200px] truncate text-right text-xs text-muted-foreground sm:max-w-xs sm:text-sm"
+                title={user.email ?? undefined}
+              >
+                {user.email}
+              </span>
+              <Link
+                href="/app"
+                className="shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+              >
+                Open app
+              </Link>
+            </>
           ) : (
             <Link
               href="/login"
