@@ -7,7 +7,7 @@ import { ImageDropzone, type PreparedImage } from "@/components/ImageDropzone";
 import { ModelPicker } from "@/components/ModelPicker";
 import { GenerationOptions } from "@/components/GenerationOptions";
 import { JobCard } from "@/components/JobCard";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { tryCreateSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   estimateCost,
   type GenerateRequest,
@@ -38,28 +38,33 @@ export function Studio({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+  const supabase = useMemo(() => tryCreateSupabaseBrowserClient(), []);
 
   // Realtime updates on this user's jobs.
   useEffect(() => {
+    if (!supabase) return;
     const channel = supabase
       .channel(`jobs-${userId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "jobs", filter: `user_id=eq.${userId}` },
-        (payload) => {
+        (payload: {
+          eventType: string;
+          new: Record<string, unknown>;
+          old: Record<string, unknown>;
+        }) => {
           setJobs((prev) => {
             if (payload.eventType === "INSERT") {
-              const row = payload.new as JobRow;
+              const row = payload.new as unknown as JobRow;
               if (prev.some((j) => j.id === row.id)) return prev;
               return [row, ...prev].slice(0, 48);
             }
             if (payload.eventType === "UPDATE") {
-              const row = payload.new as JobRow;
+              const row = payload.new as unknown as JobRow;
               return prev.map((j) => (j.id === row.id ? row : j));
             }
             if (payload.eventType === "DELETE") {
-              const row = payload.old as JobRow;
+              const row = payload.old as unknown as JobRow;
               return prev.filter((j) => j.id !== row.id);
             }
             return prev;
@@ -78,6 +83,7 @@ export function Studio({
       (j) => !previewUrls[j.id] && !j.preview_image_url && j.input_image_path,
     );
     if (missing.length === 0) return;
+    if (!supabase) return;
     let cancelled = false;
     (async () => {
       const updates: Record<string, string> = {};
@@ -107,6 +113,12 @@ export function Studio({
 
   async function onGenerate() {
     if (!image || submitting) return;
+    if (!supabase) {
+      setError(
+        "Supabase is not configured in the browser bundle. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY for this environment in Vercel and redeploy.",
+      );
+      return;
+    }
     setError(null);
     setSubmitting(true);
     try {
@@ -199,7 +211,7 @@ export function Studio({
           </div>
           <button
             type="button"
-            disabled={!image || submitting}
+            disabled={!supabase || !image || submitting}
             onClick={onGenerate}
             className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 transition hover:opacity-90 disabled:opacity-50"
           >

@@ -1,7 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  createSupabaseBrowserClient,
+  isSupabaseBrowserConfigured,
+} from "@/lib/supabase/client";
 
 export function SignOutButton({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -9,8 +12,10 @@ export function SignOutButton({ children }: { children: React.ReactNode }) {
     <button
       type="button"
       onClick={async () => {
-        const supabase = createSupabaseBrowserClient();
-        await supabase.auth.signOut();
+        if (isSupabaseBrowserConfigured()) {
+          const supabase = createSupabaseBrowserClient();
+          await supabase.auth.signOut();
+        }
         router.replace("/");
         router.refresh();
       }}

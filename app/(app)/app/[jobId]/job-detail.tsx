@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Download, Hourglass, Loader2 } from "lucide-react";
 import { ModelViewer } from "@/components/ModelViewer";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { tryCreateSupabaseBrowserClient } from "@/lib/supabase/client";
 import { MODELS } from "@/lib/fal";
 import type { JobRow } from "@/lib/types/database";
 import { timeAgo } from "@/lib/utils";
@@ -14,15 +14,17 @@ export function JobDetail({ initialJob }: { initialJob: JobRow }) {
   const [pbrUrl, setPbrUrl] = useState<string | null>(null);
   const [inputUrl, setInputUrl] = useState<string | null>(null);
 
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+  const supabase = useMemo(() => tryCreateSupabaseBrowserClient(), []);
 
   useEffect(() => {
+    if (!supabase) return;
     const channel = supabase
       .channel(`job-${job.id}`)
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "jobs", filter: `id=eq.${job.id}` },
-        (payload) => setJob(payload.new as JobRow),
+        (payload: { new: Record<string, unknown> }) =>
+          setJob(payload.new as unknown as JobRow),
       )
       .subscribe();
     return () => {

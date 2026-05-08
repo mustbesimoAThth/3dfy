@@ -1,8 +1,11 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useMemo, useState } from "react";
 import { Loader2, Mail } from "lucide-react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  createSupabaseBrowserClient,
+  isSupabaseBrowserConfigured,
+} from "@/lib/supabase/client";
 
 export function LoginForm({
   searchParamsPromise,
@@ -18,14 +21,63 @@ export function LoginForm({
   const [sent, setSent] = useState(initialSent);
   const [error, setError] = useState<string | null>(null);
 
-  const supabase = createSupabaseBrowserClient();
+  const supabase = useMemo(() => {
+    if (!isSupabaseBrowserConfigured()) return null;
+    return createSupabaseBrowserClient();
+  }, []);
+
+  if (!supabase) {
+    return (
+      <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-6 text-left text-sm">
+        <p className="font-semibold text-destructive">Supabase is not wired up</p>
+        <p className="mt-2 text-muted-foreground">
+          The app needs{" "}
+          <code className="rounded bg-background px-1 py-0.5 text-xs">
+            NEXT_PUBLIC_SUPABASE_URL
+          </code>{" "}
+          and{" "}
+          <code className="rounded bg-background px-1 py-0.5 text-xs">
+            NEXT_PUBLIC_SUPABASE_ANON_KEY
+          </code>{" "}
+          in Vercel.
+        </p>
+        <ol className="mt-3 list-decimal space-y-1 pl-4 text-muted-foreground">
+          <li>
+            Vercel → your project → <strong>Settings → Environment Variables</strong>
+          </li>
+          <li>
+            Add both variables for <strong>Production</strong>,{" "}
+            <strong>Preview</strong>, and <strong>Development</strong> (preview
+            URLs use Preview).
+          </li>
+          <li>
+            <strong>Deployments → Redeploy</strong> (changing env does not update
+            old bundles;{" "}
+            <code className="text-xs">NEXT_PUBLIC_*</code> is baked in at build
+            time).
+          </li>
+        </ol>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Keys:{" "}
+          <a
+            className="text-primary underline"
+            href="https://supabase.com/dashboard/project/_/settings/api"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Supabase → Project Settings → API
+          </a>
+        </p>
+      </div>
+    );
+  }
 
   async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading("magic");
     const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await supabase!.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: redirectTo },
     });
@@ -38,7 +90,7 @@ export function LoginForm({
     setError(null);
     setLoading("google");
     const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { error } = await supabase!.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo },
     });
