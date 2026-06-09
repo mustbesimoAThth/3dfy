@@ -1,10 +1,27 @@
 import type { Metadata, Viewport } from "next";
+import { Inter, Fraunces } from "next/font/google";
 import "./globals.css";
 import { AuthHashRedirect } from "@/components/AuthHashRedirect";
+import { SiteFooter } from "@/components/SiteFooter";
+
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-fraunces",
+  display: "swap",
+});
 
 const APP_NAME = "3dfy";
 const APP_DESCRIPTION =
-  "Drop an image, get a 3D model. Powered by Tripo3D and fal.ai.";
+  "Drop an image, get a 3D model. Engineered by Simone Leonelli.";
 
 export const metadata: Metadata = {
   applicationName: APP_NAME,
@@ -31,8 +48,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0c" },
+    { media: "(prefers-color-scheme: light)", color: "#f3f7fc" },
+    { media: "(prefers-color-scheme: dark)", color: "#f3f7fc" },
   ],
   width: "device-width",
   initialScale: 1,
@@ -46,10 +63,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
-      <body className="min-h-screen gradient-bg">
+    <html
+      lang="en"
+      className={`${inter.variable} ${fraunces.variable}`}
+      suppressHydrationWarning
+    >
+      <body className="min-h-screen gradient-bg flex flex-col">
         <AuthHashRedirect />
-        {children}
+        <div className="flex-1">{children}</div>
+        <SiteFooter />
       </body>
     </html>
   );

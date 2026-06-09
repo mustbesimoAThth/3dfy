@@ -3,19 +3,29 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Sparkles } from "lucide-react";
-import { ImageDropzone, type PreparedImage } from "@/components/ImageDropzone";
+import { ImageDropzone } from "@/components/ImageDropzone";
+import { MultiImageDropzone } from "@/components/MultiImageDropzone";
 import { ModelPicker } from "@/components/ModelPicker";
 import { GenerationOptions } from "@/components/GenerationOptions";
 import { JobCard } from "@/components/JobCard";
 import { tryCreateSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   estimateCost,
+  H31_MV_MAX_IMAGES,
+  RECON_MAX_IMAGES,
   type GenerateRequest,
   type H31Options,
   type P1Options,
   type ReconOptions,
 } from "@/lib/fal";
+import type { PreparedImage } from "@/lib/image";
 import type { FalModelId, JobRow } from "@/lib/types/database";
+
+/** Per-model image cap. Models not listed here are single-image. */
+const MAX_IMAGES_BY_MODEL: Partial<Record<FalModelId, number>> = {
+  "fal-ai/reconviagen-0.5": RECON_MAX_IMAGES,
+  "tripo3d/h3.1/multiview-to-3d": H31_MV_MAX_IMAGES,
+};
 
 export function Studio({
   initialJobs,
@@ -27,7 +37,7 @@ export function Studio({
   const router = useRouter();
   const [jobs, setJobs] = useState(initialJobs);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
-  const [image, setImage] = useState<PreparedImage | null>(null);
+  const [images, setImages] = useState<PreparedImage[]>([]);
   const [model, setModel] = useState<FalModelId>("fal-ai/reconviagen-0.5");
   const [recon, setRecon] = useState<ReconOptions>({
     resolution: 1024,
@@ -45,6 +55,9 @@ export function Studio({
   const [error, setError] = useState<string | null>(null);
 
   const supabase = useMemo(() => tryCreateSupabaseBrowserClient(), []);
+
+  const maxImages = MAX_IMAGES_BY_MODEL[model] ?? 1;
+  const isMultiView = maxImages > 1;
 
   // Realtime updates on this user's jobs.
   useEffect(() => {
@@ -110,17 +123,32 @@ export function Studio({
     };
   }, [jobs, previewUrls, supabase]);
 
-  const request: GenerateRequest =
-    model === "fal-ai/reconviagen-0.5"
-      ? { model, input_image_path: "", options: recon }
-      : model === "tripo3d/p1/image-to-3d"
-        ? { model, input_image_path: "", options: p1 }
-        : { model, input_image_path: "", options: h31 };
+  // Trim the image list down when switching from a multi-view model to a
+  // single-image one so we never submit more inputs than the model accepts.
+  useEffect(() => {
+    setImages((prev) => {
+      if (prev.length <= maxImages) return prev;
+      for (const dropped of prev.slice(maxImages)) {
+        URL.revokeObjectURL(dropped.previewUrl);
+      }
+      return prev.slice(0, maxImages);
+    });
+  }, [maxImages]);
 
-  const cost = estimateCost(request);
+  // Build a request shape just for cost estimation. The image fields use
+  // placeholder values — they don't affect the estimate.
+  const requestForEstimate: GenerateRequest = buildRequest(
+    model,
+    ["_"],
+    recon,
+    p1,
+    h31,
+  );
+
+  const cost = estimateCost(requestForEstimate);
 
   async function onGenerate() {
-    if (!image || submitting) return;
+    if (images.length === 0 || submitting) return;
     if (!supabase) {
       setError(
         "Supabase is not configured in the browser bundle. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY for this environment in Vercel and redeploy.",
@@ -130,22 +158,22 @@ export function Studio({
     setError(null);
     setSubmitting(true);
     try {
-      const ext = (image.filename.split(".").pop() || "webp").toLowerCase();
-      const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from("inputs")
-        .upload(path, image.blob, {
-          contentType: image.blob.type || "image/webp",
-          upsert: false,
-        });
-      if (upErr) throw upErr;
+      // Upload every input image first, in order.
+      const paths: string[] = [];
+      for (const img of images) {
+        const ext = (img.filename.split(".").pop() || "webp").toLowerCase();
+        const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+        const { error: upErr } = await supabase.storage
+          .from("inputs")
+          .upload(path, img.blob, {
+            contentType: img.blob.type || "image/webp",
+            upsert: false,
+          });
+        if (upErr) throw upErr;
+        paths.push(path);
+      }
 
-      const body: GenerateRequest =
-        model === "fal-ai/reconviagen-0.5"
-          ? { model, input_image_path: path, options: recon }
-          : model === "tripo3d/p1/image-to-3d"
-            ? { model, input_image_path: path, options: p1 }
-            : { model, input_image_path: path, options: h31 };
+      const body: GenerateRequest = buildRequest(model, paths, recon, p1, h31);
 
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -157,9 +185,9 @@ export function Studio({
         throw new Error(j.error ?? `Request failed (${res.status})`);
       }
       const json = (await res.json()) as { jobId: string };
-      // Reset image, keep options.
-      URL.revokeObjectURL(image.previewUrl);
-      setImage(null);
+      // Reset images, keep options.
+      for (const img of images) URL.revokeObjectURL(img.previewUrl);
+      setImages([]);
       router.push(`/app/${json.jobId}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Generation failed.");
@@ -179,11 +207,23 @@ export function Studio({
           </p>
         </header>
 
-        <ImageDropzone
-          value={image}
-          onChange={setImage}
-          disabled={submitting}
-        />
+        {isMultiView ? (
+          <MultiImageDropzone
+            value={images}
+            onChange={setImages}
+            max={maxImages}
+            disabled={submitting}
+          />
+        ) : (
+          <ImageDropzone
+            value={images[0] ?? null}
+            onChange={(img) => {
+              if (img) setImages([img]);
+              else setImages([]);
+            }}
+            disabled={submitting}
+          />
+        )}
 
         <div>
           <h2 className="mb-2 text-sm font-medium">Model</h2>
@@ -214,7 +254,7 @@ export function Studio({
           </p>
         )}
 
-        <div className="sticky bottom-4 z-10 flex items-center justify-between rounded-2xl border border-border/60 bg-background/80 p-3 backdrop-blur">
+        <div className="sticky bottom-4 z-10 flex flex-col items-stretch gap-2 rounded-2xl border border-border/60 bg-background/80 p-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
           <div className="text-xs text-muted-foreground">
             {model === "fal-ai/reconviagen-0.5" ? (
               <>
@@ -222,7 +262,7 @@ export function Studio({
                 <span className="font-medium text-foreground">
                   ${cost.toFixed(2)}
                 </span>{" "}
-                <span className="opacity-80">(see fal billing)</span>
+                <span className="opacity-80">(metered usage)</span>
               </>
             ) : (
               <>
@@ -235,9 +275,9 @@ export function Studio({
           </div>
           <button
             type="button"
-            disabled={!supabase || !image || submitting}
+            disabled={!supabase || images.length === 0 || submitting}
             onClick={onGenerate}
-            className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 transition hover:opacity-90 disabled:opacity-50"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 transition hover:opacity-90 disabled:opacity-50 sm:w-auto"
           >
             {submitting ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -276,4 +316,34 @@ export function Studio({
       </section>
     </div>
   );
+}
+
+/**
+ * Build the discriminated request body for the chosen model. Single-image
+ * models read only the first path; multi-image models read all of them.
+ *
+ * Note: `tripo3d/h3.1/image-to-3d` is intentionally NOT a target here — the
+ * UI no longer offers it (replaced by `tripo3d/h3.1/multiview-to-3d`). The
+ * type union still includes it so historical job rows continue to typecheck.
+ */
+function buildRequest(
+  model: FalModelId,
+  paths: string[],
+  recon: ReconOptions,
+  p1: P1Options,
+  h31: H31Options,
+): GenerateRequest {
+  switch (model) {
+    case "fal-ai/reconviagen-0.5":
+      return { model, input_image_paths: paths, options: recon };
+    case "tripo3d/p1/image-to-3d":
+      return { model, input_image_path: paths[0], options: p1 };
+    case "tripo3d/h3.1/multiview-to-3d":
+      return { model, input_image_paths: paths, options: h31 };
+    case "tripo3d/h3.1/image-to-3d":
+      // Should be unreachable from the UI, but keep the union exhaustive.
+      throw new Error(
+        "tripo3d/h3.1/image-to-3d is no longer offered. Use tripo3d/h3.1/multiview-to-3d.",
+      );
+  }
 }

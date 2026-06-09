@@ -1,5 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database, JobInsert, JobRow, JobUpdate } from "@/lib/types/database";
+import type {
+  Database,
+  JobInputRow,
+  JobInsert,
+  JobRow,
+  JobUpdate,
+} from "@/lib/types/database";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = SupabaseClient<Database, "public", any>;
@@ -66,4 +72,44 @@ export async function countJobsLast24h(
     .gte("created_at", since);
   if (error) throw error;
   return count ?? 0;
+}
+
+/**
+ * Insert one row per input image, in display order. The first path is
+ * `position: 0`. Caller must already have validated paths against the user's
+ * own folder (RLS will reject otherwise).
+ */
+export async function insertJobInputs(
+  supabase: Client,
+  jobId: string,
+  userId: string,
+  imagePaths: string[],
+): Promise<void> {
+  if (imagePaths.length === 0) return;
+  const rows = imagePaths.map((image_path, position) => ({
+    job_id: jobId,
+    user_id: userId,
+    image_path,
+    position,
+  }));
+  const { error } = await supabase.from("job_inputs").insert(rows);
+  if (error) throw error;
+}
+
+/**
+ * Returns input image paths for a job in display order. May return an empty
+ * array for legacy jobs created before the `job_inputs` table existed; callers
+ * should fall back to `jobs.input_image_path` in that case.
+ */
+export async function listJobInputs(
+  supabase: Client,
+  jobId: string,
+): Promise<JobInputRow[]> {
+  const { data, error } = await supabase
+    .from("job_inputs")
+    .select("*")
+    .eq("job_id", jobId)
+    .order("position", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
 }

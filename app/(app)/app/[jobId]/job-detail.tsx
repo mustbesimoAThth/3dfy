@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Download, Hourglass, Loader2 } from "lucide-react";
+import { GenerationProgressBar } from "@/components/GenerationProgressBar";
 import { ModelViewer } from "@/components/ModelViewer";
+import { ShareToGalleryPanel } from "@/components/ShareToGalleryPanel";
 import { tryCreateSupabaseBrowserClient } from "@/lib/supabase/client";
 import { MODELS } from "@/lib/fal";
 import type { JobRow } from "@/lib/types/database";
@@ -12,7 +14,7 @@ export function JobDetail({ initialJob }: { initialJob: JobRow }) {
   const [job, setJob] = useState(initialJob);
   const [glbUrl, setGlbUrl] = useState<string | null>(null);
   const [pbrUrl, setPbrUrl] = useState<string | null>(null);
-  const [inputUrl, setInputUrl] = useState<string | null>(null);
+  const [inputUrls, setInputUrls] = useState<string[]>([]);
 
   const supabase = useMemo(() => tryCreateSupabaseBrowserClient(), []);
 
@@ -58,10 +60,20 @@ export function JobDetail({ initialJob }: { initialJob: JobRow }) {
   useEffect(() => {
     if (!job.input_image_path) return;
     void (async () => {
-      const r = await fetch(`/api/jobs/${job.id}/asset?variant=input`);
+      const r = await fetch(`/api/jobs/${job.id}/inputs`);
       if (r.ok) {
-        const j = (await r.json()) as { url: string };
-        setInputUrl(j.url);
+        const j = (await r.json()) as { urls: string[] };
+        if (j.urls.length > 0) {
+          setInputUrls(j.urls);
+          return;
+        }
+      }
+      // Fallback for legacy jobs (no job_inputs rows): use the single
+      // primary input via the original asset endpoint.
+      const r2 = await fetch(`/api/jobs/${job.id}/asset?variant=input`);
+      if (r2.ok) {
+        const j2 = (await r2.json()) as { url: string };
+        setInputUrls([j2.url]);
       }
     })();
   }, [job.id, job.input_image_path]);
@@ -76,7 +88,7 @@ export function JobDetail({ initialJob }: { initialJob: JobRow }) {
             <ModelViewer
               src={glbUrl}
               poster={job.preview_image_url ?? undefined}
-              alt={`3D model from ${model.name}`}
+              alt="Generated 3D model preview"
             />
           ) : job.status === "failed" ? (
             <div className="grid h-full w-full place-items-center text-center">
@@ -84,22 +96,29 @@ export function JobDetail({ initialJob }: { initialJob: JobRow }) {
                 <AlertCircle className="mx-auto h-8 w-8" />
                 <p className="font-medium">Generation failed</p>
                 <p className="text-sm text-destructive/80">
-                  {job.error ?? "Something went wrong on fal.ai's side."}
+                  {job.error ?? "Something went wrong on the generator's side."}
                 </p>
               </div>
             </div>
           ) : (
             <div className="grid h-full w-full place-items-center">
-              <div className="flex flex-col items-center gap-3 text-muted-foreground">
+              <div className="flex flex-col items-center gap-6 text-muted-foreground">
                 {job.status === "queued" ? (
                   <Hourglass className="h-7 w-7" />
                 ) : (
                   <Loader2 className="h-7 w-7 animate-spin" />
                 )}
-                <p className="text-sm">
+                <GenerationProgressBar
+                  jobId={job.id}
+                  jobStatus={job.status}
+                  model={job.model}
+                  falRequestId={job.fal_request_id}
+                  jobStartedAt={job.created_at}
+                />
+                <p className="max-w-[22rem] px-4 text-center text-xs opacity-90">
                   {job.status === "queued"
-                    ? "Queued — waiting for fal.ai to pick it up."
-                    : "Generating your model… this can take 30s–3min."}
+                    ? "Usually 30 seconds to a few minutes depending on tier and queue load."
+                    : "You can leave this page — completion updates sync when you come back."}
                 </p>
               </div>
             </div>
@@ -110,7 +129,7 @@ export function JobDetail({ initialJob }: { initialJob: JobRow }) {
       <aside className="space-y-4">
         <div className="rounded-2xl border border-border/60 bg-background/40 p-4 backdrop-blur">
           <h2 className="text-sm font-medium text-muted-foreground">Model</h2>
-          <p className="mt-1 font-semibold">{model.name}</p>
+          <p className="mt-1 font-semibold">{model.tagline}</p>
           <p className="text-xs text-muted-foreground">{model.description}</p>
           <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
             <dt className="text-muted-foreground">Status</dt>
@@ -130,17 +149,40 @@ export function JobDetail({ initialJob }: { initialJob: JobRow }) {
           </dl>
         </div>
 
-        {inputUrl && (
+        {inputUrls.length > 0 && (
           <div className="rounded-2xl border border-border/60 bg-background/40 p-4 backdrop-blur">
             <h2 className="mb-2 text-sm font-medium text-muted-foreground">
-              Source image
+              {inputUrls.length === 1
+                ? "Source image"
+                : `Source images (${inputUrls.length})`}
             </h2>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={inputUrl}
-              alt="source"
-              className="w-full rounded-lg object-contain"
-            />
+            {inputUrls.length === 1 ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={inputUrls[0]}
+                alt="source"
+                className="w-full rounded-lg object-contain"
+              />
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {inputUrls.map((u, i) => (
+                  <div
+                    key={u}
+                    className="relative aspect-square overflow-hidden rounded-lg border border-border bg-background"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={u}
+                      alt={`source view ${i + 1}`}
+                      className="h-full w-full object-contain"
+                    />
+                    <span className="absolute left-1.5 top-1.5 rounded-md bg-background/85 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground backdrop-blur">
+                      {i + 1}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -165,6 +207,8 @@ export function JobDetail({ initialJob }: { initialJob: JobRow }) {
             </div>
           </div>
         )}
+
+        <ShareToGalleryPanel job={job} />
       </aside>
     </div>
   );

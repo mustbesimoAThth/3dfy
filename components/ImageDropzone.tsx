@@ -2,21 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, ImagePlus, Loader2, X } from "lucide-react";
+import {
+  IMAGE_ACCEPT,
+  IMAGE_MAX_BYTES,
+  prepareImage,
+  type PreparedImage,
+} from "@/lib/image";
 import { cn } from "@/lib/utils";
 
-const ACCEPT = "image/png,image/jpeg,image/webp,image/avif,image/gif";
-const MAX_DIM = 2048;
-const MAX_BYTES = 12 * 1024 * 1024;
-
-export interface PreparedImage {
-  /** Object URL for preview (caller is responsible for revoking). */
-  previewUrl: string;
-  blob: Blob;
-  /** Original filename (best-effort). */
-  filename: string;
-  width: number;
-  height: number;
-}
+export type { PreparedImage } from "@/lib/image";
 
 export function ImageDropzone({
   value,
@@ -41,13 +35,13 @@ export function ImageDropzone({
         setError("That's not an image.");
         return;
       }
-      if (file.size > MAX_BYTES) {
+      if (file.size > IMAGE_MAX_BYTES) {
         setError("Image must be under 12 MB.");
         return;
       }
       setBusy(true);
       try {
-        const prepared = await resizeImage(file);
+        const prepared = await prepareImage(file);
         onChange(prepared);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Couldn't read that image.");
@@ -159,7 +153,7 @@ export function ImageDropzone({
         <input
           ref={fileInputRef}
           type="file"
-          accept={ACCEPT}
+          accept={IMAGE_ACCEPT}
           className="hidden"
           onChange={(e) => void handleFile(e.target.files?.[0])}
         />
@@ -189,61 +183,4 @@ export function ImageDropzone({
       </div>
     </div>
   );
-}
-
-async function resizeImage(file: File): Promise<PreparedImage> {
-  const previewUrl = URL.createObjectURL(file);
-  const img = await loadImage(previewUrl);
-  const { width: w0, height: h0 } = img;
-
-  // No need to resize.
-  if (Math.max(w0, h0) <= MAX_DIM && file.size <= 4 * 1024 * 1024) {
-    return {
-      previewUrl,
-      blob: file,
-      filename: file.name || "image",
-      width: w0,
-      height: h0,
-    };
-  }
-
-  const scale = Math.min(1, MAX_DIM / Math.max(w0, h0));
-  const w = Math.round(w0 * scale);
-  const h = Math.round(h0 * scale);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas not supported");
-  ctx.drawImage(img, 0, 0, w, h);
-
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("Resize failed"))),
-      "image/webp",
-      0.92,
-    );
-  });
-
-  // Replace preview with resized version.
-  URL.revokeObjectURL(previewUrl);
-  const newPreview = URL.createObjectURL(blob);
-  const baseName = (file.name || "image").replace(/\.[^.]+$/, "");
-  return {
-    previewUrl: newPreview,
-    blob,
-    filename: `${baseName}.webp`,
-    width: w,
-    height: h,
-  };
-}
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Couldn't decode image"));
-    img.src = src;
-  });
 }

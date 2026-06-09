@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import type { H31Options, P1Options, ReconOptions } from "@/lib/fal";
 import type { FalModelId } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
@@ -7,7 +8,7 @@ import { cn } from "@/lib/utils";
 export type Options =
   | { model: "fal-ai/reconviagen-0.5"; options: ReconOptions }
   | { model: "tripo3d/p1/image-to-3d"; options: P1Options }
-  | { model: "tripo3d/h3.1/image-to-3d"; options: H31Options };
+  | { model: "tripo3d/h3.1/multiview-to-3d"; options: H31Options };
 
 export function GenerationOptions({
   model,
@@ -141,7 +142,13 @@ export function GenerationOptions({
               key={t}
               type="button"
               disabled={disabled}
-              onClick={() => onChangeH31({ ...h31, texture: t })}
+              onClick={() =>
+                onChangeH31({
+                  ...h31,
+                  texture: t,
+                  ...(t === "no" ? { pbr: false } : {}),
+                })
+              }
               className={cn(
                 "rounded-xl border bg-background/40 px-3 py-2 text-xs font-medium capitalize backdrop-blur transition",
                 h31.texture === t
@@ -177,7 +184,7 @@ export function GenerationOptions({
         help="Include physically-based materials (no extra cost)."
         checked={h31.pbr}
         onChange={(v) => onChangeH31({ ...h31, pbr: v })}
-        disabled={disabled}
+        disabled={disabled || h31.texture === "no"}
       />
     </div>
   );
@@ -196,42 +203,39 @@ function Toggle({
   onChange: (v: boolean) => void;
   disabled?: boolean;
 }) {
+  const labelId = useId();
   return (
-    <label
+    <div
       className={cn(
-        "flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border bg-background/40 px-3 py-2.5 backdrop-blur",
-        disabled && "cursor-not-allowed opacity-60",
+        "flex items-center justify-between gap-3 rounded-xl border border-border bg-background/40 px-3 py-2.5 backdrop-blur",
+        disabled ? "cursor-not-allowed opacity-60" : "",
       )}
     >
-      <span>
+      <span id={labelId}>
         <span className="block text-sm font-medium">{label}</span>
         {help && (
           <span className="block text-[11px] text-muted-foreground">{help}</span>
         )}
       </span>
-      <span
+      <button
+        type="button"
         role="switch"
         aria-checked={checked}
-        onClick={() => !disabled && onChange(!checked)}
+        aria-labelledby={labelId}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
         className={cn(
-          "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition",
+          "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           checked ? "bg-primary" : "bg-secondary",
         )}
       >
         <span
           className={cn(
-            "inline-block h-5 w-5 translate-x-0.5 transform rounded-full bg-background shadow transition",
+            "pointer-events-none inline-block h-5 w-5 translate-x-0.5 transform rounded-full bg-background shadow transition",
             checked && "translate-x-[22px]",
           )}
         />
-      </span>
-      <input
-        type="checkbox"
-        className="sr-only"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        disabled={disabled}
-      />
-    </label>
+      </button>
+    </div>
   );
 }

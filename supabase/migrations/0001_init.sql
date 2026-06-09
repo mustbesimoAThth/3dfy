@@ -10,7 +10,11 @@ create table if not exists public.jobs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   model text not null check (
-    model in ('tripo3d/p1/image-to-3d', 'tripo3d/h3.1/image-to-3d')
+    model in (
+      'fal-ai/reconviagen-0.5',
+      'tripo3d/p1/image-to-3d',
+      'tripo3d/h3.1/image-to-3d'
+    )
   ),
   options jsonb not null default '{}'::jsonb,
   input_image_path text not null,

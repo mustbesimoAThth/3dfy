@@ -100,11 +100,24 @@ async function downloadAndUpload(
   const res = await fetch(url);
   if (!res.ok) throw new Error(`download failed: ${res.status}`);
   const arrayBuf = await res.arrayBuffer();
+  const sizeMb = (arrayBuf.byteLength / (1024 * 1024)).toFixed(1);
+
   const { error } = await admin.storage
     .from("models")
     .upload(path, arrayBuf, {
       contentType,
       upsert: true,
     });
-  if (error) throw error;
+
+  if (error) {
+    const msg = (error as { message?: string }).message ?? String(error);
+    if (/exceed/i.test(msg) || /max(imum)? (allowed )?size/i.test(msg)) {
+      throw new Error(
+        `The generated model is ${sizeMb} MB but Supabase Storage rejected the upload. ` +
+          `In Supabase Dashboard → Project → Storage → Settings, raise "Global file size limit" to at least 500 MB ` +
+          `(the "models" bucket cap is already 500 MB; the project-wide limit clamps it down).`,
+      );
+    }
+    throw new Error(`Storage upload failed (${sizeMb} MB): ${msg}`);
+  }
 }

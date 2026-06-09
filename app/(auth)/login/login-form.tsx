@@ -1,11 +1,21 @@
 "use client";
 
 import { use, useMemo, useState } from "react";
-import { Loader2, Mail } from "lucide-react";
+import { Loader2, Lock, Mail } from "lucide-react";
 import {
   createSupabaseBrowserClient,
   isSupabaseBrowserConfigured,
 } from "@/lib/supabase/client";
+import {
+  ALLOWED_EMAIL_DOMAIN,
+  ALLOWED_EMAIL_MESSAGE,
+  isAllowedEmail,
+} from "@/lib/auth/allowed-email";
+
+type Method = "magic" | "password";
+type PasswordMode = "signin" | "signup";
+type Loading = "magic" | "password" | null;
+type Sent = "magic" | "signup" | null;
 
 export function LoginForm({
   searchParamsPromise,
@@ -20,18 +30,22 @@ export function LoginForm({
 }) {
   const params = use(searchParamsPromise);
   const next = params.next ?? "/app";
-  const initialSent = params.sent === "1";
   const urlAuthError = params.error_description
     ? decodeURIComponent(params.error_description.replace(/\+/g, " "))
-    : params.error_code === "otp_expired"
-      ? "This sign-in link has expired or was already used. Request a new one."
-      : params.error
-        ? "Sign-in failed. Try again."
-        : null;
+    : params.error === "domain"
+      ? ALLOWED_EMAIL_MESSAGE
+      : params.error_code === "otp_expired"
+        ? "This sign-in link has expired or was already used. Request a new one."
+        : params.error
+          ? "Sign-in failed. Try again."
+          : null;
 
+  const [method, setMethod] = useState<Method>("magic");
+  const [passwordMode, setPasswordMode] = useState<PasswordMode>("signin");
   const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState<"magic" | "google" | null>(null);
-  const [sent, setSent] = useState(initialSent);
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState<Loading>(null);
+  const [sent, setSent] = useState<Sent>(params.sent === "1" ? "magic" : null);
   const [error, setError] = useState<string | null>(null);
 
   const supabase = useMemo(() => {
@@ -42,82 +56,112 @@ export function LoginForm({
   if (!supabase) {
     return (
       <div className="space-y-4">
-        {urlAuthError && (
-          <p className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {urlAuthError}
-          </p>
-        )}
+        {urlAuthError && <ErrorBanner>{urlAuthError}</ErrorBanner>}
         <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-6 text-left text-sm">
-        <p className="font-semibold text-destructive">Supabase is not wired up</p>
-        <p className="mt-2 text-muted-foreground">
-          The app needs{" "}
-          <code className="rounded bg-background px-1 py-0.5 text-xs">
-            NEXT_PUBLIC_SUPABASE_URL
-          </code>{" "}
-          and{" "}
-          <code className="rounded bg-background px-1 py-0.5 text-xs">
-            NEXT_PUBLIC_SUPABASE_ANON_KEY
-          </code>{" "}
-          in Vercel.
-        </p>
-        <ol className="mt-3 list-decimal space-y-1 pl-4 text-muted-foreground">
-          <li>
-            Vercel → your project → <strong>Settings → Environment Variables</strong>
-          </li>
-          <li>
-            Add both variables for <strong>Production</strong>,{" "}
-            <strong>Preview</strong>, and <strong>Development</strong> (preview
-            URLs use Preview).
-          </li>
-          <li>
-            <strong>Deployments → Redeploy</strong> (changing env does not update
-            old bundles;{" "}
-            <code className="text-xs">NEXT_PUBLIC_*</code> is baked in at build
-            time).
-          </li>
-        </ol>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Keys:{" "}
-          <a
-            className="text-primary underline"
-            href="https://supabase.com/dashboard/project/_/settings/api"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Supabase → Project Settings → API
-          </a>
-        </p>
-      </div>
+          <p className="font-semibold text-destructive">
+            Supabase is not wired up
+          </p>
+          <p className="mt-2 text-muted-foreground">
+            The app needs{" "}
+            <code className="rounded bg-background px-1 py-0.5 text-xs">
+              NEXT_PUBLIC_SUPABASE_URL
+            </code>{" "}
+            and{" "}
+            <code className="rounded bg-background px-1 py-0.5 text-xs">
+              NEXT_PUBLIC_SUPABASE_ANON_KEY
+            </code>{" "}
+            in Vercel.
+          </p>
+          <ol className="mt-3 list-decimal space-y-1 pl-4 text-muted-foreground">
+            <li>
+              Vercel → your project →{" "}
+              <strong>Settings → Environment Variables</strong>
+            </li>
+            <li>
+              Add both variables for <strong>Production</strong>,{" "}
+              <strong>Preview</strong>, and <strong>Development</strong> (preview
+              URLs use Preview).
+            </li>
+            <li>
+              <strong>Deployments → Redeploy</strong> (changing env does not
+              update old bundles;{" "}
+              <code className="text-xs">NEXT_PUBLIC_*</code> is baked in at build
+              time).
+            </li>
+          </ol>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Keys:{" "}
+            <a
+              className="text-primary underline"
+              href="https://supabase.com/dashboard/project/_/settings/api"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Supabase → Project Settings → API
+            </a>
+          </p>
+        </div>
       </div>
     );
+  }
+
+  function guardDomain(): boolean {
+    if (isAllowedEmail(email)) return true;
+    setError(ALLOWED_EMAIL_MESSAGE);
+    return false;
   }
 
   async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!guardDomain()) return;
     setLoading("magic");
     const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
     const { error } = await supabase!.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: redirectTo },
+      options: { emailRedirectTo: redirectTo, shouldCreateUser: true },
     });
     setLoading(null);
     if (error) setError(error.message);
-    else setSent(true);
+    else setSent("magic");
   }
 
-  async function signInWithGoogle() {
+  async function submitPassword(e: React.FormEvent) {
+    e.preventDefault();
     setError(null);
-    setLoading("google");
-    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
-    const { error } = await supabase!.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo },
+    if (!guardDomain()) return;
+    setLoading("password");
+
+    if (passwordMode === "signup") {
+      const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
+      const { data, error } = await supabase!.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: redirectTo },
+      });
+      setLoading(null);
+      if (error) {
+        setError(error.message);
+        return;
+      }
+      if (data.session) {
+        window.location.assign(next);
+        return;
+      }
+      setSent("signup");
+      return;
+    }
+
+    const { error } = await supabase!.auth.signInWithPassword({
+      email,
+      password,
     });
+    setLoading(null);
     if (error) {
       setError(error.message);
-      setLoading(null);
+      return;
     }
+    window.location.assign(next);
   }
 
   if (sent) {
@@ -128,8 +172,18 @@ export function LoginForm({
         </div>
         <h2 className="text-lg font-semibold">Check your inbox</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          We sent a sign-in link to <strong>{email || "your email"}</strong>.
-          The link expires in 1 hour.
+          {sent === "signup" ? (
+            <>
+              Confirm your account from the link we sent to{" "}
+              <strong>{email || "your email"}</strong>, then come back to sign
+              in.
+            </>
+          ) : (
+            <>
+              We sent a sign-in link to <strong>{email || "your email"}</strong>
+              . The link expires in 1 hour.
+            </>
+          )}
         </p>
       </div>
     );
@@ -137,74 +191,158 @@ export function LoginForm({
 
   return (
     <div className="space-y-4">
-      {urlAuthError && (
-        <p className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {urlAuthError}
-        </p>
-      )}
-      <button
-        type="button"
-        onClick={signInWithGoogle}
-        disabled={loading !== null}
-        className="flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-sm font-medium hover:bg-accent disabled:opacity-50"
-      >
-        {loading === "google" ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <GoogleIcon />
-        )}
-        Continue with Google
-      </button>
+      {urlAuthError && <ErrorBanner>{urlAuthError}</ErrorBanner>}
 
-      <div className="relative py-1 text-center text-xs text-muted-foreground">
-        <span className="relative bg-background px-2">or</span>
-        <div className="absolute inset-x-0 top-1/2 -z-0 h-px bg-border" />
+      <div className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-background/50 p-1 text-sm">
+        <MethodTab
+          active={method === "magic"}
+          onClick={() => {
+            setMethod("magic");
+            setError(null);
+          }}
+          icon={<Mail className="h-4 w-4" />}
+          label="Magic link"
+        />
+        <MethodTab
+          active={method === "password"}
+          onClick={() => {
+            setMethod("password");
+            setError(null);
+          }}
+          icon={<Lock className="h-4 w-4" />}
+          label="Password"
+        />
       </div>
 
-      <form onSubmit={sendMagicLink} className="space-y-3">
-        <label className="block text-sm">
-          <span className="text-muted-foreground">Email</span>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-            autoComplete="email"
-            inputMode="email"
-          />
-        </label>
-        <button
-          type="submit"
-          disabled={loading !== null || !email}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-        >
-          {loading === "magic" ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
+      {method === "magic" ? (
+        <form onSubmit={sendMagicLink} className="space-y-3">
+          <EmailField value={email} onChange={setEmail} />
+          <SubmitButton loading={loading === "magic"} disabled={!email}>
             <Mail className="h-4 w-4" />
-          )}
-          Send magic link
-        </button>
-      </form>
-
-      {error && (
-        <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </p>
+            Send magic link
+          </SubmitButton>
+        </form>
+      ) : (
+        <form onSubmit={submitPassword} className="space-y-3">
+          <EmailField value={email} onChange={setEmail} />
+          <label className="block text-sm">
+            <span className="text-muted-foreground">Password</span>
+            <input
+              type="password"
+              required
+              minLength={8}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              autoComplete={
+                passwordMode === "signup" ? "new-password" : "current-password"
+              }
+            />
+          </label>
+          <SubmitButton
+            loading={loading === "password"}
+            disabled={!email || password.length < 8}
+          >
+            <Lock className="h-4 w-4" />
+            {passwordMode === "signup" ? "Create account" : "Sign in"}
+          </SubmitButton>
+          <button
+            type="button"
+            onClick={() => {
+              setPasswordMode((m) => (m === "signup" ? "signin" : "signup"));
+              setError(null);
+            }}
+            className="w-full text-center text-xs text-muted-foreground underline-offset-4 hover:underline"
+          >
+            {passwordMode === "signup"
+              ? "Already have an account? Sign in"
+              : `New here? Create an account with your @${ALLOWED_EMAIL_DOMAIN} email`}
+          </button>
+        </form>
       )}
+
+      {error && <ErrorBanner>{error}</ErrorBanner>}
     </div>
   );
 }
 
-function GoogleIcon() {
+function MethodTab({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden>
-      <path
-        fill="#EA4335"
-        d="M12 11v3.6h5.1c-.2 1.3-1.6 3.7-5.1 3.7-3.1 0-5.6-2.5-5.6-5.7s2.5-5.7 5.6-5.7c1.7 0 2.9.7 3.6 1.4l2.5-2.4C16.6 4.6 14.5 3.6 12 3.6 6.9 3.6 2.8 7.7 2.8 12.6S6.9 21.6 12 21.6c6.9 0 9.5-4.8 9.5-7.3 0-.5 0-.9-.1-1.3H12z"
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 font-medium transition ${
+        active
+          ? "bg-primary text-primary-foreground"
+          : "text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function EmailField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block text-sm">
+      <span className="text-muted-foreground">Email</span>
+      <input
+        type="email"
+        required
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={`you@${ALLOWED_EMAIL_DOMAIN}`}
+        className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+        autoComplete="email"
+        inputMode="email"
       />
-    </svg>
+    </label>
+  );
+}
+
+function SubmitButton({
+  loading,
+  disabled,
+  children,
+}: {
+  loading: boolean;
+  disabled: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="submit"
+      disabled={loading || disabled}
+      className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+    >
+      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : children}
+    </button>
+  );
+}
+
+function ErrorBanner({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      {children}
+    </p>
   );
 }

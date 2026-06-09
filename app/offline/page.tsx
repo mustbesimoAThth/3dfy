@@ -11,7 +11,7 @@ export default function OfflinePage() {
         </div>
         <h1 className="text-2xl font-semibold">You&apos;re offline</h1>
         <p className="text-sm text-muted-foreground">
-          3dfy needs the network to talk to fal.ai. Reconnect and try again.
+          3dfy needs the network to generate models. Reconnect and try again.
         </p>
       </div>
     </main>

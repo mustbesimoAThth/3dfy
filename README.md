@@ -1,6 +1,8 @@
 # 3dfy — Image to 3D PWA
 
-Mobile-first PWA where you drop an image and get a downloadable, AR-ready `.glb` 3D model back. Built with **Next.js 15 + Supabase + fal.ai (Tripo3D P1 / H3.1)**.
+Mobile-first PWA where you drop an image and get a downloadable, AR-ready `.glb` 3D model back. Built on **Next.js 15 + Supabase**, with a managed AI generation backend.
+
+_Engineered by Simone Leonelli._
 
 ## Features
 
@@ -26,9 +28,9 @@ npm install
 2. Run the migration in `supabase/migrations/0001_init.sql` (SQL editor).
 3. Copy `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` into `.env.local`.
 
-### fal.ai
+### Generation provider
 
-1. Grab an API key at <https://fal.ai/dashboard/keys> and put it in `FAL_KEY`.
+1. Provision an API key for the managed generation backend and put it in `FAL_KEY`.
 2. Generate a strong `WEBHOOK_SECRET` (e.g. `openssl rand -hex 32`).
 
 ### Run locally
@@ -52,9 +54,9 @@ Set all env vars in the Vercel dashboard. Once deployed, set `NEXT_PUBLIC_SITE_U
 ```
 Browser (PWA) ──upload──▶ Supabase Storage (inputs/, private)
      │
-     ├── POST /api/generate (signed image URL → fal.queue.submit + webhook)
+     ├── POST /api/generate (signed image URL → queue.submit + webhook)
      │
-     │            fal.ai ──webhook──▶ /api/fal-webhook
+     │      generation backend ──webhook──▶ /api/fal-webhook
      │                                       │
      │                                       └─ download .glb → Storage (models/)
      │                                          → update jobs row
