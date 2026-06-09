@@ -5,9 +5,8 @@ import { isAppGateConfigured, sanitizeNext } from "@/lib/auth/app-gate";
 const ERRORS: Record<string, string> = {
   "1": "Incorrect password. Try again.",
   account:
-    "Password accepted, but the shared account isn't set up yet. Check SHARED_ACCOUNT_EMAIL and that the Supabase user exists with this password (email confirmed).",
-  config:
-    "Access is not configured. Set APP_ACCESS_PASSWORD and SHARED_ACCOUNT_EMAIL, then redeploy.",
+    "Password accepted, but the shared account isn't set up yet. In Supabase, create a user with email studio@app.local and password set to the same value as APP_ACCESS_PASSWORD, with email confirmed.",
+  config: "APP_ACCESS_PASSWORD is not configured. Set it in Vercel, then redeploy.",
 };
 
 export default async function GatePage({

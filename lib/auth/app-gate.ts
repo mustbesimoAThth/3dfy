@@ -2,22 +2,24 @@
  * Single shared "access password" front door.
  *
  * There is no per-user sign-in: everyone who enters APP_ACCESS_PASSWORD at
- * /gate is signed into one shared Supabase account (SHARED_ACCOUNT_EMAIL),
+ * /gate is signed into one shared Supabase account with a fictitious email,
  * whose Supabase password must equal APP_ACCESS_PASSWORD. The Supabase session
  * cookie is the source of truth — protected routes just check for a user.
  */
+
+const SHARED_ACCOUNT_EMAIL = "studio@app.local";
 
 export function accessPassword(): string | undefined {
   return process.env.APP_ACCESS_PASSWORD?.trim() || undefined;
 }
 
-export function sharedAccountEmail(): string | undefined {
-  return process.env.SHARED_ACCOUNT_EMAIL?.trim() || undefined;
+export function sharedAccountEmail(): string {
+  return SHARED_ACCOUNT_EMAIL;
 }
 
-/** True once both the password and the shared account email are configured. */
+/** True when the access password is configured. */
 export function isAppGateConfigured(): boolean {
-  return Boolean(accessPassword() && sharedAccountEmail());
+  return Boolean(accessPassword());
 }
 
 export function isPasswordCorrect(password: string): boolean {
