@@ -51,10 +51,10 @@ export default async function LandingPage() {
             </>
           ) : (
             <Link
-              href="/login"
+              href="/gate"
               className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
-              Sign in
+              Enter app
             </Link>
           )}
         </nav>
@@ -77,7 +77,7 @@ export default async function LandingPage() {
           back in under a minute. Works offline as a PWA.
         </p>
         <Link
-          href={user ? "/app" : "/login"}
+          href={user ? "/app" : "/gate"}
           className="mt-10 inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-medium text-primary-foreground shadow-lg shadow-primary/20 transition hover:opacity-90"
         >
           Start generating

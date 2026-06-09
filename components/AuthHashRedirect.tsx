@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 
 /**
  * Supabase sometimes returns auth errors in the hash (e.g. after magic link),
- * which never reaches the server. Forward to /login so we can show a message.
+ * which never reaches the server. Forward to /gate so we can show a message.
  */
 export function AuthHashRedirect() {
   const router = useRouter();
@@ -29,7 +29,7 @@ export function AuthHashRedirect() {
 
     window.history.replaceState(null, "", `${pathname}${window.location.search}`);
 
-    router.replace(`/login?${next.toString()}`);
+    router.replace(`/gate?${next.toString()}`);
   }, [router, pathname]);
 
   return null;

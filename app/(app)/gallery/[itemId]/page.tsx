@@ -17,7 +17,7 @@ export default async function GalleryItemPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect(`/login?next=/gallery/${itemId}`);
+  if (!user) redirect(`/gate?next=/gallery/${itemId}`);
 
   let item;
   try {

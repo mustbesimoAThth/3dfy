@@ -14,7 +14,7 @@ export default async function AppGroupLayout({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login?next=/app");
+  if (!user) redirect("/gate?next=/app");
 
   return (
     <div className="min-h-screen pb-[max(env(safe-area-inset-bottom),16px)]">

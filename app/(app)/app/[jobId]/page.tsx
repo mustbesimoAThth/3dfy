@@ -17,7 +17,7 @@ export default async function JobPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/gate");
 
   const job = await getJob(supabase, jobId);
   if (!job || job.user_id !== user.id) notFound();
